@@ -1,0 +1,19 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+.vscode/
+.idea/
+.agents/
+
+# Environment / secrets
+.env
+backend/.env
+*.env.local
+
