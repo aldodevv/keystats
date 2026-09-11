@@ -172,11 +172,15 @@ class TelegramBotService:
             market_summary = self.market_service.get_market_summary()
             html_message = self.format_daily_picks_html(market_summary)
 
+            send_res: Dict[str, Any] = {"success": False}
+
             # Safeguard message length under 4000 characters
             if len(html_message) > 4000:
                 parts = [html_message[:4000], html_message[4000:]]
                 for part in parts:
                     send_res = self.send_message(text=part, chat_id=chat_id, parse_mode="HTML")
+                    if not send_res.get("success", False):
+                        break
             else:
                 send_res = self.send_message(text=html_message, chat_id=chat_id, parse_mode="HTML")
 
