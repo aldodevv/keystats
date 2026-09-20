@@ -66,8 +66,30 @@ class ValuationEngine:
         dcf_fair_value = ValuationEngine._calculate_dcf(raw, shares, is_bank, bvps)
         
         # 7. Historical Valuation Bands Analysis
-        pe_status = ValuationEngine._analyze_band(per, raw.pe_mean_5y, raw.pe_standard_deviation, "PER")
-        pbv_status = ValuationEngine._analyze_band(pbv, raw.pbv_mean_5y, raw.pbv_standard_deviation, "PBV")
+        pe_mean = raw.pe_mean_5y
+        pe_std = raw.pe_standard_deviation
+        pbv_mean = raw.pbv_mean_5y
+        pbv_std = raw.pbv_standard_deviation
+
+        # Derive 3-5Y historical multiples if not provided directly
+        if (not pe_mean or not pbv_mean) and raw.historical_periods and len(raw.historical_periods) >= 2:
+            hist_pes = []
+            hist_pbvs = []
+            for hp in raw.historical_periods:
+                if hp.eps > 0 and price > 0:
+                    hist_pes.append(price / hp.eps)
+                h_bvps = hp.total_equity / shares if (shares > 0 and hp.total_equity > 0) else 0.0
+                if h_bvps > 0 and price > 0:
+                    hist_pbvs.append(price / h_bvps)
+            if len(hist_pes) >= 2 and not pe_mean:
+                pe_mean = round(sum(hist_pes) / len(hist_pes), 2)
+                pe_std = round((sum((x - pe_mean) ** 2 for x in hist_pes) / len(hist_pes)) ** 0.5, 2)
+            if len(hist_pbvs) >= 2 and not pbv_mean:
+                pbv_mean = round(sum(hist_pbvs) / len(hist_pbvs), 2)
+                pbv_std = round((sum((x - pbv_mean) ** 2 for x in hist_pbvs) / len(hist_pbvs)) ** 0.5, 2)
+
+        pe_status = ValuationEngine._analyze_band(per, pe_mean, pe_std, "PER")
+        pbv_status = ValuationEngine._analyze_band(pbv, pbv_mean, pbv_std, "PBV")
         
         # 8. Composite Fair Value Estimation (Without Look-Ahead Bias)
         fair_values = []
@@ -75,11 +97,11 @@ class ValuationEngine:
             fair_values.append(graham_number)
         if dcf_fair_value and dcf_fair_value > 0:
             fair_values.append(dcf_fair_value)
-        if raw.pe_mean_5y and raw.pe_mean_5y > 0 and eps > 0:
-            historical_pe_value = raw.pe_mean_5y * eps
+        if pe_mean and pe_mean > 0 and eps > 0:
+            historical_pe_value = pe_mean * eps
             fair_values.append(historical_pe_value)
-        if raw.pbv_mean_5y and raw.pbv_mean_5y > 0 and bvps > 0:
-            historical_pbv_value = raw.pbv_mean_5y * bvps
+        if pbv_mean and pbv_mean > 0 and bvps > 0:
+            historical_pbv_value = pbv_mean * bvps
             fair_values.append(historical_pbv_value)
             
         if fair_values:
@@ -108,7 +130,7 @@ class ValuationEngine:
     @staticmethod
     def _calculate_dcf(raw: RawKeyStats, shares: float, is_bank: bool = False, bvps: float = 0.0) -> Optional[float]:
         """
-        Calculates 5-year conservative DCF / Gordon Growth model.
+        Calculates 5-year conservative DCF / Gordon Growth model with dynamic CAPM WACC.
         For banks, uses Justified P/B Gordon formula: Fair BVPS Multiple = (ROE - g) / (Ke - g).
         """
         curr = raw.current_period
@@ -127,16 +149,15 @@ class ValuationEngine:
                 
         # Corporate Multi-Stage DCF
         base_fcf = curr.fcf
-        if base_fcf <= 0:
-            if curr.cfo > 0:
-                base_fcf = curr.cfo - abs(curr.capex)
-            if base_fcf <= 0 and curr.net_income > 0:
-                base_fcf = curr.net_income * 0.7
+        if base_fcf <= 0 and curr.cfo > 0:
+            base_fcf = curr.cfo - abs(curr.capex)
                 
         if base_fcf <= 0 or shares <= 0:
             return None
             
-        wacc = 0.10  # 10% discount rate
+        # Dynamic CAPM WACC: Rf (Indo 10Y ~6.75%) + Beta * ERP (~5.5%)
+        beta = raw.beta if (raw.beta and raw.beta > 0.2) else 1.0
+        wacc = max(0.10, min(0.18, 0.0675 + (beta * 0.055)))
         terminal_growth = 0.03
         fcf_growth = 0.07
         

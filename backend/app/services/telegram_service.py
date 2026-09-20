@@ -17,11 +17,6 @@ from app.models.market import MarketSummaryResponse, TopPickItem
 
 logger = logging.getLogger(__name__)
 
-# Fallback credentials matching deployment config
-DEFAULT_BOT_TOKEN = "8653878371:AAGgLIDflVM2MxGU9omMcWbzqKT7MyQ_olo"
-DEFAULT_CHAT_ID = "7690577065"
-
-
 class TelegramBotService:
     def __init__(
         self,
@@ -36,17 +31,11 @@ class TelegramBotService:
 
     @property
     def bot_token(self) -> str:
-        token = self._bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-        if not token:
-            token = DEFAULT_BOT_TOKEN
-        return token
+        return (self._bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "")).strip()
 
     @property
     def default_chat_id(self) -> str:
-        cid = self._default_chat_id or os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-        if not cid:
-            cid = DEFAULT_CHAT_ID
-        return str(cid)
+        return str(self._default_chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")).strip()
 
     @property
     def is_configured(self) -> bool:

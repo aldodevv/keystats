@@ -66,19 +66,25 @@ class EODHDProvider(BaseDataProvider):
     ) -> Optional[RawKeyStats]:
         clean_ticker = ticker.upper().replace(".JK", "").strip()
         
-        if not force_live and not override_price and clean_ticker in self._cache:
-            return self._cache[clean_ticker]
+        stats = None
+        if not force_live and clean_ticker in self._cache:
+            stats = self._cache[clean_ticker]
             
-        try:
-            stats = self._fetch_fundamentals_eodhd(clean_ticker)
-            if stats:
-                if override_price and override_price > 0:
-                    stats.current_price = float(override_price)
-                    stats.market_cap = float(override_price * stats.shares_outstanding)
-                self._cache[clean_ticker] = stats
-                return stats
-        except Exception:
-            pass
+        if stats is None:
+            try:
+                stats = self._fetch_fundamentals_eodhd(clean_ticker)
+                if stats:
+                    self._cache[clean_ticker] = stats
+            except Exception:
+                pass
+                
+        if stats:
+            if override_price and override_price > 0:
+                stats_copy = stats.model_copy(deep=True)
+                stats_copy.current_price = float(override_price)
+                stats_copy.market_cap = float(override_price * stats_copy.shares_outstanding)
+                return stats_copy
+            return stats
             
         return None
 

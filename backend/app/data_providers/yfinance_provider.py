@@ -20,7 +20,8 @@ yfinance is free and requires no key, so this provider is always "configured".
 """
 
 import datetime
-from typing import Optional, List, Dict, Any
+import time
+from typing import Optional, List, Dict, Any, Tuple
 
 try:
     import yfinance as yf
@@ -45,8 +46,9 @@ class YFinanceProvider(BaseDataProvider):
 
     def __init__(self) -> None:
         self._ticker_cache: Dict[str, Any] = {}
-        self._info_cache: Dict[str, Dict[str, Any]] = {}
+        self._info_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
         self._symbol_cache: Optional[List[str]] = None
+        self._info_ttl_seconds: float = 300.0  # 5 minutes TTL
 
     @property
     def is_configured(self) -> bool:
@@ -60,12 +62,18 @@ class YFinanceProvider(BaseDataProvider):
         if yf is None:
             return None
         if clean_ticker not in self._ticker_cache:
+            if len(self._ticker_cache) > 500:
+                self._ticker_cache.clear()
             self._ticker_cache[clean_ticker] = yf.Ticker(f"{clean_ticker}.JK")
         return self._ticker_cache[clean_ticker]
 
-    def _info(self, clean_ticker: str) -> Dict[str, Any]:
-        if clean_ticker in self._info_cache:
-            return self._info_cache[clean_ticker]
+    def _info(self, clean_ticker: str, force_live: bool = False) -> Dict[str, Any]:
+        now = time.time()
+        if not force_live and clean_ticker in self._info_cache:
+            ts, cached_info = self._info_cache[clean_ticker]
+            if now - ts < self._info_ttl_seconds:
+                return cached_info
+
         info: Dict[str, Any] = {}
         tk = self._yf_ticker(clean_ticker)
         if tk is not None:
@@ -77,7 +85,12 @@ class YFinanceProvider(BaseDataProvider):
                     info = dict(tk.info or {})
                 except Exception:
                     info = {}
-        self._info_cache[clean_ticker] = info
+
+        if len(self._info_cache) > 500:
+            oldest_key = min(self._info_cache.keys(), key=lambda k: self._info_cache[k][0])
+            del self._info_cache[oldest_key]
+
+        self._info_cache[clean_ticker] = (now, info)
         return info
 
     # -------------------------------------------------------------
@@ -140,7 +153,7 @@ class YFinanceProvider(BaseDataProvider):
         if tk is None:
             return None
 
-        info = self._info(clean)
+        info = self._info(clean, force_live=force_live)
         if not info:
             return None
 
@@ -301,9 +314,24 @@ class YFinanceProvider(BaseDataProvider):
             fcf = cfo - abs(capex) if cfo != 0.0 else 0.0
         div_paid = g(cashflow, ["Cash Dividends Paid", "Common Stock Dividend Paid", "Dividends Paid"], col) or 0.0
 
-        # Bank-specific (Yahoo exposes some of these for financials).
-        interest_income = g(income, ["Interest Income", "Total Money Market Investments"], col) or 0.0
+        # Bank-specific line items from income statement and balance sheet
+        interest_income = g(income, ["Interest Income", "Total Money Market Investments", "Interest And Dividend Income"], col) or 0.0
+        interest_expense = g(income, ["Interest Expense", "Total Interest Expense", "Interest Expense Non Operating"], col) or 0.0
         net_interest_income = g(income, ["Net Interest Income"], col) or 0.0
+        if net_interest_income == 0.0 and interest_income > 0 and interest_expense > 0:
+            net_interest_income = interest_income - interest_expense
+
+        total_loans = g(balance, ["Gross Loans", "Net Loans", "Loans And Advances", "Loans", "Total Loans"], col) or 0.0
+        deposits_dpk = g(balance, ["Total Deposits", "Deposits", "Customer Deposits", "Interest Bearing Deposits"], col) or 0.0
+        casa_deposits = g(balance, ["Demand Deposits", "Checking Accounts", "Savings Deposits"], col) or 0.0
+        provisions = g(income, ["Provision For Loan Losses", "Credit Losses", "Loan Loss Provision"], col) or 0.0
+
+        earning_assets = g(balance, ["Earning Assets", "Total Money Market Investments", "Investment Securities"], col) or 0.0
+        if earning_assets == 0.0 and total_assets > 0:
+            if total_loans > 0:
+                earning_assets = total_loans + cash
+            else:
+                earning_assets = total_assets * 0.85
 
         return FinancialPeriod(
             year=year,
@@ -334,7 +362,15 @@ class YFinanceProvider(BaseDataProvider):
             dividends_paid=abs(div_paid),
             shares_outstanding=shares,
             interest_income=interest_income,
+            interest_expense=interest_expense,
             net_interest_income=net_interest_income,
+            earning_assets=earning_assets,
+            total_loans=total_loans,
+            deposits_dpk=deposits_dpk,
+            casa_deposits=casa_deposits,
+            loan_loss_provisions=abs(provisions),
+            regulatory_capital=total_equity,
+            risk_weighted_assets=total_assets * 0.65 if total_assets > 0 else 0.0,
         )
 
     def _period_from_info(self, info: Dict[str, Any], shares: float, entry_point) -> Optional[FinancialPeriod]:
@@ -432,18 +468,30 @@ class YFinanceProvider(BaseDataProvider):
         if curr.total_loans > 0 and curr.deposits_dpk > 0:
             ldr = round(curr.total_loans / curr.deposits_dpk * 100, 2)
 
-        if not any([nim, ldr, curr.net_interest_income > 0, curr.total_loans > 0]):
+        casa = None
+        if curr.casa_deposits > 0 and curr.deposits_dpk > 0:
+            casa = round(curr.casa_deposits / curr.deposits_dpk * 100, 2)
+
+        coc = None
+        if curr.loan_loss_provisions > 0 and curr.total_loans > 0:
+            coc = round(curr.loan_loss_provisions / curr.total_loans * 100, 2)
+
+        car = None
+        if curr.regulatory_capital > 0 and curr.risk_weighted_assets > 0:
+            car = round(curr.regulatory_capital / curr.risk_weighted_assets * 100, 2)
+
+        if not any([nim, ldr, casa, coc, car, curr.net_interest_income > 0, curr.total_loans > 0]):
             return None
 
         return BankSpecificMetrics(
-            car=None,
+            car=car,
             npl_gross=None,
             npl_net=None,
             nim=nim,
             bopo=None,
             ldr=ldr,
-            casa=None,
-            cost_of_credit=None,
+            casa=casa,
+            cost_of_credit=coc,
             earning_assets=curr.earning_assets or None,
             total_loans=curr.total_loans or None,
             deposits_dpk=curr.deposits_dpk or None,

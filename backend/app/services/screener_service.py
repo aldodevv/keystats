@@ -170,18 +170,47 @@ class ScreenerService:
             }
         ]
         
+        all_tickers = self.emiten_service.list_all_available_tickers()
+        all_reports = self.emiten_service.analyze_many(all_tickers)
+        
         tier_groups: List[PriceTierGroup] = []
         total_recs = 0
         
         for td in tier_definitions:
-            recs = self.get_recommendations_by_price(
-                min_price=td["min_price"],
-                max_price=td["max_price"],
-                min_score=td["min_score"],
-                only_buy=False,  # show top scored in this tier
-                sort_by="composite_score",
-                limit=5
-            )
+            tier_items = []
+            min_p = td["min_price"]
+            max_p = td["max_price"]
+            min_s = td["min_score"]
+            for rep in all_reports:
+                if min_p is not None and rep.current_price < min_p:
+                    continue
+                if max_p is not None and rep.current_price >= max_p:
+                    continue
+                if rep.composite_score < min_s:
+                    continue
+                reason = self._build_recommendation_reason(rep)
+                tier_items.append(
+                    PriceRecommendationItem(
+                        ticker=rep.ticker,
+                        name=rep.name,
+                        sector=rep.sector,
+                        current_price=rep.current_price,
+                        eps=rep.eps,
+                        revenue=rep.revenue,
+                        eps_growth=rep.growth.eps_growth_yoy,
+                        composite_score=rep.composite_score,
+                        grade=rep.grade,
+                        verdict=rep.verdict.value,
+                        upside_pct=rep.valuation.upside_downside_pct,
+                        per=rep.valuation.per,
+                        pbv=rep.valuation.pbv,
+                        roe=rep.profitability.roe,
+                        dividend_yield=rep.cash_flow_dividend.dividend_yield,
+                        recommendation_reason=reason
+                    )
+                )
+            tier_items.sort(key=lambda x: x.composite_score, reverse=True)
+            recs = tier_items[:5]
             total_recs += len(recs)
             tier_groups.append(
                 PriceTierGroup(

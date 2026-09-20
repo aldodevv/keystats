@@ -34,8 +34,8 @@ class ChartService:
         # 2. Run Technical Pattern Engine (EMA 20, SMA 50, RSI 14, MACD, Breakouts, Gaps)
         indicators, signals, support_resistance, gaps = TechnicalEngine.analyze(candles)
         
-        # 3. Retrieve Fundamental Overlays from Emiten Analysis
-        report = self.emiten_service.analyze_single_emiten(clean_ticker)
+        # 3. Retrieve Fundamental Overlays from Emiten Analysis (skip ownership round-trip)
+        report = self.emiten_service.analyze_single_emiten(clean_ticker, include_ownership=False)
         overlays: Optional[FundamentalOverlay] = None
         emiten_name = clean_ticker
         

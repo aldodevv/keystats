@@ -7,6 +7,7 @@ import app.config  # noqa: F401
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from app.api.v1.emiten import router as emiten_router
 from app.api.v1.compare import router as compare_router
 from app.api.v1.screener import router as screener_router
@@ -27,11 +28,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Enable GZip compression for API responses & static assets
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # Enable CORS for Next.js / Web frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

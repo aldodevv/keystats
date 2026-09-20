@@ -112,8 +112,8 @@ class ConvictionEngine:
             bear_candidates.append(base_target * 0.75)
             
         bear_target = round(sum(bear_candidates) / len(bear_candidates), 2) if bear_candidates else round(price * 0.8, 2)
-        # Ensure bear_target <= base_target
-        bear_target = min(bear_target, base_target * 0.88)
+        # Ensure bear_target <= base_target and at least 1.0 IDR
+        bear_target = max(1.0, min(bear_target, base_target * 0.88 if base_target > 0 else price * 0.88))
         
         # Bull Case (Optimistic expansion scenario)
         bull_candidates = []
@@ -276,7 +276,7 @@ class ConvictionEngine:
         ))
 
         # 7. Free Cash Flow Generation
-        chk7_pass = bool(cf_div.fcf_yield >= 3.5 or cf_div.fcf > 0)
+        chk7_pass = bool(cf_div.fcf_yield >= 3.5 or (cf_div.fcf > 0 and cf_div.fcf_yield >= 1.0))
         checklist.append(ConvictionCheckItem(
             id="chk_fcf",
             title="Kemampuan Menghasilkan Arus Kas Bebas (FCF)",

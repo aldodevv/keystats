@@ -4,6 +4,7 @@ Uses InstitutionalDataProvider as primary data source.
 """
 
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, List
 from app.data_providers.base import BaseDataProvider
@@ -21,6 +22,8 @@ class EmitenService:
     # balance for a delayed (~15 min) free feed.
     _report_cache: dict = {}
     _report_cache_ttl_seconds = 300
+    _report_cache_max_size = 500
+    _cache_lock = threading.Lock()
     # How many emitens to analyze concurrently for market-wide features. yfinance calls
     # are I/O-bound, so a higher count meaningfully cuts full-universe cold-load time.
     _max_workers = 16
@@ -54,15 +57,22 @@ class EmitenService:
         """Returns a cached lightweight report (no ownership) for market-wide features."""
         clean = ticker.upper().replace(".JK", "").strip()
         now = time.time()
-        cached = self._report_cache.get(clean)
-        if cached and (now - cached[0]) < self._report_cache_ttl_seconds:
-            return cached[1]
+        with self._cache_lock:
+            cached = self._report_cache.get(clean)
+            if cached and (now - cached[0]) < self._report_cache_ttl_seconds:
+                return cached[1]
         try:
             report = self.analyze_single_emiten(clean, include_ownership=False)
         except Exception:
             report = None
-        # Cache both hits and misses (None) to avoid hammering a failing ticker repeatedly.
-        self._report_cache[clean] = (now, report)
+
+        with self._cache_lock:
+            if len(self._report_cache) >= self._report_cache_max_size:
+                oldest_key = min(self._report_cache.keys(), key=lambda k: self._report_cache[k][0])
+                del self._report_cache[oldest_key]
+            # Cache both hits and misses (None) to avoid hammering a failing ticker repeatedly.
+            self._report_cache[clean] = (now, report)
+
         return report
 
     def analyze_many(self, tickers: List[str]) -> List[EmitenAnalysisReport]:

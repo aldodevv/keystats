@@ -705,36 +705,37 @@ class CommodityService:
             except Exception:
                 pass
 
-        # Fallback values if all network attempts timed out
+        # Fallback benchmark baseline if all network attempts timed out
         if price <= 0:
             fallbacks = {
-                "COAL": 145.0,
-                "BRENT_OIL": 108.0,
-                "WTI_OIL": 102.8,
-                "NATURAL_GAS": 2.83,
-                "GOLD": 4370.0,
-                "NICKEL": 16624.0,
-                "TIN": 54750.0,
-                "COPPER": 6.54,
-                "SILVER": 64.0,
-                "ALUMINUM": 3452.0,
-                "CPO": 1128.0,
-                "WHEAT": 736.0,
-                "SOYBEAN": 1325.0,
-                "SUGAR": 19.8,
-                "COFFEE": 290.0,
-                "USD_IDR": 17531.0,
-                "DXY": 99.1,
-                "EUR_IDR": 20342.0,
-                "SGD_IDR": 13826.0,
-                "JPY_IDR": 113.5,
-                "CNY_IDR": 2612.0,
-                "GBP_IDR": 23657.0,
-                "AUD_IDR": 12551.0,
-                "EUR_USD": 1.161,
+                "COAL": 140.0,
+                "BRENT_OIL": 78.0,
+                "WTI_OIL": 73.0,
+                "NATURAL_GAS": 2.50,
+                "GOLD": 2650.0,
+                "NICKEL": 16500.0,
+                "TIN": 31500.0,
+                "COPPER": 4.50,
+                "SILVER": 31.0,
+                "ALUMINUM": 2600.0,
+                "CPO": 1050.0,
+                "WHEAT": 580.0,
+                "SOYBEAN": 1020.0,
+                "SUGAR": 22.0,
+                "COFFEE": 260.0,
+                "USD_IDR": 15800.0,
+                "DXY": 102.5,
+                "EUR_IDR": 17200.0,
+                "SGD_IDR": 12200.0,
+                "JPY_IDR": 108.0,
+                "CNY_IDR": 2230.0,
+                "GBP_IDR": 20800.0,
+                "AUD_IDR": 10600.0,
+                "EUR_USD": 1.085,
             }
             price = fallbacks.get(cid, 100.0)
             prev_close = price
+            source = "Benchmark Baseline (Offline)"
 
         if prev_close <= 0:
             prev_close = price
@@ -798,9 +799,15 @@ class CommodityService:
         if cid not in COMMODITY_REGISTRY:
             return None
 
-        # 1. Fetch live commodity quote
-        meta = COMMODITY_REGISTRY[cid]
-        commodity_item = self._fetch_single_quote(cid, meta)
+        # 1. Fetch live commodity quote (utilize cache if fresh)
+        now = time.time()
+        if self._price_cache and cid in self._price_cache and (now - self._price_cache_timestamp < self._PRICE_CACHE_TTL):
+            commodity_item = self._price_cache[cid]
+        else:
+            meta = COMMODITY_REGISTRY[cid]
+            commodity_item = self._fetch_single_quote(cid, meta)
+            self._price_cache[cid] = commodity_item
+            self._price_cache_timestamp = now
 
         # 2. Retrieve correlation mappings
         mappings = EMITEN_CORRELATION_REGISTRY.get(cid, [])
@@ -873,26 +880,26 @@ class CommodityService:
                 strengths = rep.green_flags[:3]
                 risks = rep.red_flags[:3]
             else:
-                # Fallback emiten info if financial report parsing had missing data
-                score = 65.0
-                grade = "B"
+                # Real-time report unavailable from data provider; do NOT fabricate synthetic numbers
+                score = 0.0
+                grade = "N/A"
                 verdict = "HOLD"
-                current_price = 1000.0
-                fair_val = 1100.0
-                upside_pct = 10.0
-                per = 8.5
-                pbv = 1.1
-                roe = 12.0
-                der = 0.8
-                f_score = 6
-                z_score = 2.5
-                div_yield = 4.5
-                company_name = ticker
-                sector = "Energy & Resources"
-                suitability = InvestmentSuitability.LAYAK_ANALISIS
-                suitability_label = "Layak Dianalisis (Good Value)"
-                strengths = ["Sensitivitas langsung terhadap kenaikan komoditas"]
-                risks = ["Fluktuasi harga komoditas global"]
+                current_price = 0.0
+                fair_val = 0.0
+                upside_pct = 0.0
+                per = 0.0
+                pbv = 0.0
+                roe = 0.0
+                der = 0.0
+                f_score = 0
+                z_score = 0.0
+                div_yield = 0.0
+                company_name = f"{ticker} (Data Belum Tersedia)"
+                sector = "General"
+                suitability = InvestmentSuitability.SPEKULATIF_WASPADA
+                suitability_label = "Data Laporan Belum Tersedia"
+                strengths = []
+                risks = ["Laporan keuangan belum tersedia dari penyedia data"]
 
             if upside_pct > 0:
                 undervalued_count += 1

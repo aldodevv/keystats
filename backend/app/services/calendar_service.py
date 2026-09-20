@@ -1209,8 +1209,8 @@ class CalendarService:
 
         agendas.sort(key=sort_key)
 
-        # 2. Compute Global Stats
-        all_raw = self._get_base_dataset(reference_date)
+        # 2. Compute Global Stats (reusing dataset without duplicate instantiation)
+        all_raw = raw_items
         high_impact_cnt = sum(1 for r in all_raw if r["impact_level"] == ImpactLevel.HIGH)
         dom_cnt = sum(1 for r in all_raw if r["market_scope"] == MarketScope.INDONESIA)
         us_cnt = sum(1 for r in all_raw if r["market_scope"] == MarketScope.US_GLOBAL)

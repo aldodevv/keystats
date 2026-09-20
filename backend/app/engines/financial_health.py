@@ -96,8 +96,17 @@ class FinancialHealthEngine:
         # 2. Quality of Earnings: CFO to Net Income
         cfo_ratio = (curr.cfo / curr.net_income) if curr.net_income > 0 else 0.0
         
-        # 3. Beneish M-Score
-        m_score, is_manipulation = FinancialHealthEngine._calculate_beneish(curr, prev)
+        # 3. Beneish M-Score (Applicable only to non-financial corporations)
+        is_bank = (
+            getattr(raw, "xbrl_entry_point", None) == XBRLEntryPoint.FINANCIAL_BANKING or
+            "bank" in getattr(raw, "sector", "").lower() or
+            "financial" in getattr(raw, "sector", "").lower() or
+            getattr(raw, "bank_metrics", None) is not None
+        )
+        if is_bank:
+            m_score, is_manipulation = None, False
+        else:
+            m_score, is_manipulation = FinancialHealthEngine._calculate_beneish(curr, prev)
         
         return QualityScoreResult(
             piotroski_f_score=f_score,
@@ -156,11 +165,15 @@ class FinancialHealthEngine:
         if prev:
             if prev.revenue > 0:
                 rev_growth = ((curr.revenue - prev.revenue) / prev.revenue) * 100
-            if prev.net_income > 0:
-                ni_growth = ((curr.net_income - prev.net_income) / prev.net_income) * 100
-            if prev.eps > 0:
-                eps_growth = ((curr.eps - prev.eps) / prev.eps) * 100
-        # When no real prior period is reported, growth stays 0.0 (no fabricated estimate).
+            if prev.net_income != 0:
+                ni_growth = ((curr.net_income - prev.net_income) / abs(prev.net_income)) * 100
+            elif curr.net_income > 0:
+                ni_growth = 100.0
+
+            if prev.eps != 0:
+                eps_growth = ((curr.eps - prev.eps) / abs(prev.eps)) * 100
+            elif curr.eps > 0:
+                eps_growth = 100.0
             
         # 3Y CAGR calculation if historical_periods available
         rev_cagr = None
@@ -232,7 +245,7 @@ class FinancialHealthEngine:
         cur_liab = curr.current_liabilities if curr.current_liabilities > 0 else (liabilities * 0.5)
         working_capital = cur_assets - cur_liab
         
-        retained_earnings = curr.retained_earnings if curr.retained_earnings > 0 else (curr.total_equity * 0.5)
+        retained_earnings = curr.retained_earnings if curr.retained_earnings != 0 else (curr.total_equity * 0.5 if curr.total_equity > 0 else 0.0)
         ebit = curr.ebit if curr.ebit != 0 else curr.operating_profit
         book_equity = curr.total_equity
         
