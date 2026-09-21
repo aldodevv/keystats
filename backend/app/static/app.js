@@ -443,6 +443,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await resp.json();
             cachedSingleEmitenData = data;
             renderSingleEmiten(data);
+            loadCorporateCatalysts(ticker);
+            loadTickerNews(ticker);
+            if (liveQuoteSocket && liveQuoteSocket.readyState === WebSocket.OPEN) {
+                liveQuoteSocket.send(JSON.stringify({
+                    action: 'subscribe',
+                    tickers: [ticker]
+                }));
+            }
         } catch (err) {
             console.error('Error loading single emiten:', err);
             if (!isSilent) {
@@ -3138,4 +3146,211 @@ document.addEventListener('DOMContentLoaded', () => {
             if (marketTabBtn) marketTabBtn.click();
         }
     });
+
+    // -------------------------------------------------------------
+    // Live Corporate Catalysts & Earnings/Dividend Loader
+    // -------------------------------------------------------------
+    async function loadCorporateCatalysts(ticker) {
+        if (!ticker) return;
+        const cleanTicker = ticker.toUpperCase().replace('.JK', '').trim();
+        const titleEl = document.getElementById('cat-ticker-title');
+        if (titleEl) titleEl.textContent = cleanTicker;
+
+        const earnDateEl = document.getElementById('cat-earnings-date');
+        const earnDetailEl = document.getElementById('cat-earnings-detail');
+        const exDivDateEl = document.getElementById('cat-ex-div-date');
+        const recentDivsEl = document.getElementById('cat-recent-divs');
+
+        try {
+            const resp = await fetch(`/api/v1/calendar/corporate/${cleanTicker}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+
+            if (earnDateEl) {
+                earnDateEl.textContent = data.earnings_date ? data.earnings_date : 'Belum Dijadwalkan';
+            }
+            if (earnDetailEl) {
+                let detailText = '';
+                if (data.earnings_est_avg) detailText += `EPS Est: ${data.earnings_est_avg} `;
+                if (data.revenue_est_avg) detailText += `Rev Est: ${formatRupiah(data.revenue_est_avg)}`;
+                earnDetailEl.textContent = detailText || 'Estimasi konsensus analis';
+            }
+            if (exDivDateEl) {
+                exDivDateEl.textContent = data.ex_dividend_date ? data.ex_dividend_date : 'Belum Ada Pengumuman';
+            }
+            if (recentDivsEl) {
+                if (data.recent_dividends && data.recent_dividends.length > 0) {
+                    recentDivsEl.innerHTML = data.recent_dividends.map(d => `
+                        <div class="flex items-center justify-between border-b border-white/[0.04] py-1">
+                            <span class="text-slate-400">${d.date}</span>
+                            <span class="text-emerald-400 font-bold">Rp ${d.amount_per_share.toLocaleString('id-ID')}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    recentDivsEl.innerHTML = '<span class="text-slate-500 italic">Tidak ada riwayat dividen baru</span>';
+                }
+            }
+        } catch (e) {
+            console.error('Error loading corporate catalysts:', e);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Live News & Market Sentiment Loader
+    // -------------------------------------------------------------
+    async function loadTickerNews(ticker) {
+        if (!ticker) return;
+        const cleanTicker = ticker.toUpperCase().replace('.JK', '').trim();
+        const newsTitleEl = document.getElementById('news-ticker-title');
+        if (newsTitleEl) newsTitleEl.textContent = cleanTicker;
+
+        const gridEl = document.getElementById('emiten-news-grid');
+        const pillEl = document.getElementById('news-sentiment-pill');
+        const textEl = document.getElementById('news-sentiment-text');
+
+        if (gridEl) {
+            gridEl.innerHTML = '<div class="col-span-2 text-center py-6 text-slate-400 font-mono text-xs">Memuat berita & sentimen terkini...</div>';
+        }
+
+        try {
+            const resp = await fetch(`/api/v1/news/ticker/${cleanTicker}?max_items=8`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+
+            if (pillEl && textEl && data.sentiment_summary) {
+                const s = data.sentiment_summary;
+                textEl.textContent = `${s.bullish_percentage}% BULLISH (${s.bullish_count} Naik / ${s.bearish_count} Turun)`;
+                if (s.overall_sentiment === 'BULLISH') {
+                    pillEl.className = 'px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1.5';
+                } else if (s.overall_sentiment === 'BEARISH') {
+                    pillEl.className = 'px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold flex items-center gap-1.5';
+                } else {
+                    pillEl.className = 'px-2.5 py-1 rounded-full bg-slate-500/20 text-slate-300 border border-slate-500/30 font-bold flex items-center gap-1.5';
+                }
+            }
+
+            if (gridEl) {
+                if (data.news && data.news.length > 0) {
+                    gridEl.innerHTML = data.news.map(item => {
+                        const sentBadge = item.sentiment === 'BULLISH'
+                            ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold font-mono">BULLISH</span>'
+                            : (item.sentiment === 'BEARISH'
+                                ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold font-mono">BEARISH</span>'
+                                : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-400 border border-slate-500/30 font-bold font-mono">NETRAL</span>');
+
+                        const tags = (item.catalyst_tags || []).map(t =>
+                            `<span class="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.06] text-slate-300 border border-white/[0.08]">${t}</span>`
+                        ).join(' ');
+
+                        return `
+                            <a href="${item.link}" target="_blank" rel="noopener noreferrer"
+                               class="news-card block p-3.5 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] transition group">
+                                <div class="flex items-center justify-between gap-2 mb-1.5">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">${item.source}</span>
+                                        <span class="text-[10px] text-slate-400 font-mono">${item.time_ago || ''}</span>
+                                    </div>
+                                    ${sentBadge}
+                                </div>
+                                <h3 class="text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-white line-clamp-2 leading-snug mb-2">
+                                    ${item.title}
+                                </h3>
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    ${tags}
+                                </div>
+                            </a>
+                        `;
+                    }).join('');
+                } else {
+                    gridEl.innerHTML = '<div class="col-span-2 text-center py-6 text-slate-500 italic text-xs">Belum ada berita terbaru untuk ticker ini</div>';
+                }
+            }
+        } catch (e) {
+            console.error('Error loading ticker news:', e);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Live WebSocket Client Connection & Subscription
+    // -------------------------------------------------------------
+    let liveQuoteSocket = null;
+    let wsReconnectTimeout = null;
+
+    function initLiveQuoteWebSocket() {
+        if (liveQuoteSocket && (liveQuoteSocket.readyState === WebSocket.OPEN || liveQuoteSocket.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/live-quotes`;
+
+        const badgeDot = document.getElementById('ws-status-dot');
+        const badgeText = document.getElementById('ws-status-text');
+
+        try {
+            liveQuoteSocket = new WebSocket(wsUrl);
+
+            liveQuoteSocket.onopen = () => {
+                if (badgeDot) badgeDot.className = 'w-2 h-2 rounded-full bg-emerald-400 pulse-emerald';
+                if (badgeText) badgeText.textContent = 'LIVE IDX';
+                if (currentActiveTicker) {
+                    liveQuoteSocket.send(JSON.stringify({
+                        action: 'subscribe',
+                        tickers: [currentActiveTicker]
+                    }));
+                }
+            };
+
+            liveQuoteSocket.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'quote_tick') {
+                        handleQuoteTick(msg);
+                    }
+                } catch (e) {
+                    console.error('WS parse error:', e);
+                }
+            };
+
+            liveQuoteSocket.onclose = () => {
+                if (badgeDot) badgeDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+                if (badgeText) badgeText.textContent = 'RECONNECTING';
+                clearTimeout(wsReconnectTimeout);
+                wsReconnectTimeout = setTimeout(initLiveQuoteWebSocket, 4000);
+            };
+
+            liveQuoteSocket.onerror = () => {
+                if (badgeDot) badgeDot.className = 'w-2 h-2 rounded-full bg-rose-400';
+            };
+        } catch (e) {
+            console.error('WS init error:', e);
+        }
+    }
+
+    function handleQuoteTick(quote) {
+        if (!quote || !quote.ticker) return;
+        if (currentActiveTicker && quote.ticker.toUpperCase() === currentActiveTicker.toUpperCase()) {
+            const priceEl = document.getElementById('r-price');
+            if (priceEl && quote.price > 0) {
+                const oldPriceText = priceEl.textContent.replace(/[^0-9]/g, '');
+                const oldPrice = parseFloat(oldPriceText) || 0;
+
+                priceEl.textContent = formatCurrency(quote.price);
+
+                if (oldPrice > 0 && quote.price > oldPrice) {
+                    priceEl.classList.remove('flash-tick-up', 'flash-tick-down');
+                    void priceEl.offsetWidth; // trigger reflow
+                    priceEl.classList.add('flash-tick-up');
+                } else if (oldPrice > 0 && quote.price < oldPrice) {
+                    priceEl.classList.remove('flash-tick-up', 'flash-tick-down');
+                    void priceEl.offsetWidth; // trigger reflow
+                    priceEl.classList.add('flash-tick-down');
+                }
+            }
+        }
+    }
+
+    // Initialize Live WebSocket
+    initLiveQuoteWebSocket();
 });
+

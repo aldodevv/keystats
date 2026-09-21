@@ -17,6 +17,8 @@ from app.api.v1.chart import router as chart_router
 from app.api.v1.calendar import router as calendar_router
 from app.api.v1.telegram import router as telegram_router
 from app.api.v1.commodity import router as commodity_router
+from app.api.v1.news import router as news_router
+from app.api.v1.websocket import router as ws_router
 
 import os
 from fastapi.staticfiles import StaticFiles
@@ -50,6 +52,9 @@ app.include_router(compare_router, prefix="/api/v1")
 app.include_router(screener_router, prefix="/api/v1")
 app.include_router(chart_router, prefix="/api/v1")
 app.include_router(telegram_router, prefix="/api/v1")
+app.include_router(news_router, prefix="/api/v1")
+app.include_router(ws_router)
+
 
 # Mount static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")

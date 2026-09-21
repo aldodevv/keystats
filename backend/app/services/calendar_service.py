@@ -1308,3 +1308,66 @@ class CalendarService:
                 macro_exposure="Sektor defensif dengan arus kas stabil, namun emiten menara sensitif terhadap biaya bunga pembiayaan ekspansi."
             )
         ]
+
+    def get_corporate_catalysts(self, ticker: str) -> Dict[str, Any]:
+        """
+        Fetches live corporate calendar dates (Earnings releases, Ex-Dividend dates,
+        and recent cash dividend payouts) from yfinance for an emiten.
+        """
+        import yfinance as yf
+        clean = ticker.upper().replace(".JK", "").strip()
+        result: Dict[str, Any] = {
+            "ticker": clean,
+            "earnings_date": None,
+            "earnings_est_avg": None,
+            "revenue_est_avg": None,
+            "ex_dividend_date": None,
+            "recent_dividends": [],
+            "events": []
+        }
+        try:
+            tk = yf.Ticker(f"{clean}.JK")
+            cal = tk.calendar
+            if isinstance(cal, dict):
+                earn = cal.get("Earnings Date")
+                if earn:
+                    earn_val = earn[0] if isinstance(earn, list) and len(earn) > 0 else earn
+                    result["earnings_date"] = str(earn_val)
+                    result["earnings_est_avg"] = cal.get("Earnings Average")
+                    result["revenue_est_avg"] = cal.get("Revenue Average")
+                    rev_text = f", Revenue Est: Rp {cal.get('Revenue Average', 0):,.0f}" if cal.get("Revenue Average") else ""
+                    result["events"].append({
+                        "category": "EARNINGS",
+                        "title": f"Estimasi Rilis Laporan Keuangan {clean}",
+                        "date": str(earn_val),
+                        "details": f"EPS Est: {cal.get('Earnings Average', '-')}{rev_text}"
+                    })
+                ex_div = cal.get("Ex-Dividend Date")
+                if ex_div:
+                    result["ex_dividend_date"] = str(ex_div)
+                    result["events"].append({
+                        "category": "DIVIDEND_EX",
+                        "title": f"Ex-Dividend Date {clean}",
+                        "date": str(ex_div),
+                        "details": "Tanggal penentuan hak dividen tunai investor"
+                    })
+
+            divs = tk.dividends
+            if divs is not None and not divs.empty:
+                recent = divs.tail(4)
+                for dt, val in recent.items():
+                    date_str = dt.strftime("%Y-%m-%d")
+                    result["recent_dividends"].append({
+                        "date": date_str,
+                        "amount_per_share": float(val)
+                    })
+                    result["events"].append({
+                        "category": "PAST_DIVIDEND",
+                        "title": f"Pembagian Dividen Tunai {clean}",
+                        "date": date_str,
+                        "details": f"Rp {float(val):.2f} per saham"
+                    })
+        except Exception:
+            pass
+        return result
+

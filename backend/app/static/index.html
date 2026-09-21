@@ -200,6 +200,14 @@
                 </div>
 
                 <div class="ml-auto flex items-center gap-2.5 shrink-0">
+                    <!-- Live WebSocket Ticker Stream Indicator -->
+                    <div id="ws-status-badge"
+                        class="apple-glass-pill hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border border-emerald-500/30 text-emerald-400 text-xs font-mono transition-all shadow-sm"
+                        title="WebSocket Live IDX Quote Feed">
+                        <span id="ws-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 pulse-emerald"></span>
+                        <span id="ws-status-text" class="font-bold">LIVE IDX</span>
+                    </div>
+
                     <!-- Live Kurs pill (Apple OS Glass Pill) -->
                     <button id="fx-rate-pill"
                         class="apple-glass-pill flex items-center gap-2 px-3 py-1.5 rounded-2xl border border-amber-500/30 hover:border-amber-400/60 text-amber-300 text-xs font-mono transition-all shadow-sm cursor-pointer group"
@@ -1811,6 +1819,73 @@
                                         <!-- Injected dynamically -->
                                     </ul>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Corporate Catalysts & Earnings/Dividend Schedule -->
+                        <div id="corporate-catalysts-card" class="apple-glass rounded-2xl p-5 shadow-xl space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">📅</span>
+                                    <h2 class="font-bold text-sm text-white">Kalender Aksi Korporasi & Jadwal Lapkeu (<span id="cat-ticker-title">BBRI</span>)</h2>
+                                </div>
+                                <span class="text-[11px] font-mono text-slate-400 bg-white/[0.05] px-2.5 py-1 rounded-full border border-white/[0.08]">
+                                    Live IDX Filings
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <!-- Next Earnings -->
+                                <div class="bg-blue-950/20 border border-blue-500/30 rounded-xl p-4 space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-blue-400 font-bold uppercase tracking-wider">Estimasi Rilis Lapkeu</span>
+                                        <span class="text-sm">📊</span>
+                                    </div>
+                                    <div id="cat-earnings-date" class="text-base font-bold font-mono text-white">-</div>
+                                    <div id="cat-earnings-detail" class="text-[11px] text-slate-400 leading-tight">Perkiraan konsensus EPS & Revenue</div>
+                                </div>
+
+                                <!-- Next Ex-Dividend -->
+                                <div class="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-4 space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-emerald-400 font-bold uppercase tracking-wider">Jadwal Ex-Dividen</span>
+                                        <span class="text-sm">💰</span>
+                                    </div>
+                                    <div id="cat-ex-div-date" class="text-base font-bold font-mono text-white">-</div>
+                                    <div class="text-[11px] text-slate-400 leading-tight">Tanggal ex-dividen terdaftar</div>
+                                </div>
+
+                                <!-- Recent Dividends -->
+                                <div class="bg-purple-950/20 border border-purple-500/30 rounded-xl p-4 space-y-2 md:col-span-2 lg:col-span-1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-purple-400 font-bold uppercase tracking-wider">Riwayat Dividen Tunai Terakhir</span>
+                                        <span class="text-sm">📜</span>
+                                    </div>
+                                    <div id="cat-recent-divs" class="space-y-1 text-xs font-mono text-slate-300">
+                                        <!-- Injected dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Real-Time News & Market Sentiment Feed -->
+                        <div id="emiten-news-section" class="apple-glass rounded-2xl p-5 shadow-xl space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">📰</span>
+                                    <h2 class="font-bold text-sm text-white">Katalis & Berita Terkini (<span id="news-ticker-title">BBRI</span>)</h2>
+                                </div>
+                                <div id="news-sentiment-badge" class="flex items-center gap-2 font-mono text-xs">
+                                    <span id="news-sentiment-pill" class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1.5">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                        <span id="news-sentiment-text">75% BULLISH</span>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- News Cards Grid -->
+                            <div id="emiten-news-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                <!-- Injected dynamically -->
                             </div>
                         </div>
 

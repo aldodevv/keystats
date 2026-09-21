@@ -47,6 +47,15 @@ def get_sector_sensitivities():
     return calendar_service.get_sector_sensitivities()
 
 
+@router.get("/corporate/{ticker}")
+def get_corporate_catalysts(ticker: str):
+    """
+    Returns live corporate event dates (earnings report dates, ex-dividend dates, and recent payouts) for an IDX ticker.
+    """
+    clean = ticker.upper().replace(".JK", "").strip()
+    return calendar_service.get_corporate_catalysts(clean)
+
+
 @router.get("/{agenda_id}", response_model=CalendarAgendaItem)
 def get_agenda_detail(agenda_id: str):
     """
@@ -56,3 +65,4 @@ def get_agenda_detail(agenda_id: str):
     if not item:
         raise HTTPException(status_code=404, detail=f"Agenda with id '{agenda_id}' not found")
     return item
+

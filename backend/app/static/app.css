@@ -405,3 +405,45 @@ input:focus, select:focus {
     transform: translateY(-1px) scale(1.03);
     box-shadow: 0 6px 16px rgba(10, 132, 255, 0.25);
 }
+
+/* =========================================================================
+   Live Quote WebSocket Tick & Real-Time News Styles
+   ========================================================================= */
+
+@keyframes flashGreen {
+    0% { background-color: rgba(48, 209, 88, 0.35); }
+    100% { background-color: transparent; }
+}
+
+@keyframes flashRed {
+    0% { background-color: rgba(255, 69, 58, 0.35); }
+    100% { background-color: transparent; }
+}
+
+.flash-tick-up {
+    animation: flashGreen 1.2s ease-out;
+}
+
+.flash-tick-down {
+    animation: flashRed 1.2s ease-out;
+}
+
+.pulse-emerald {
+    animation: pulseEmerald 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulseEmerald {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.news-card {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.news-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(10, 132, 255, 0.35);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
